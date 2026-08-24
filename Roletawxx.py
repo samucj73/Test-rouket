@@ -37,24 +37,19 @@ def salvar_sessao():
             'sistema_contador_sorteios_global': st.session_state.sistema.contador_sorteios_global,
             'sistema_sequencia_erros': st.session_state.sistema.sequencia_erros,
             'sistema_ultima_estrategia_erro': st.session_state.sistema.ultima_estrategia_erro,
-            # NOVO: Dados da estratégia de 3 acertos
             'sistema_sequencia_acertos': st.session_state.sistema.sequencia_acertos,
             'sistema_ultima_combinacao_acerto': st.session_state.sistema.ultima_combinacao_acerto,
             'sistema_historico_combinacoes_acerto': st.session_state.sistema.historico_combinacoes_acerto,
-            # Dados da estratégia Zonas
             'zonas_historico': list(st.session_state.sistema.estrategia_zonas.historico),
             'zonas_stats': st.session_state.sistema.estrategia_zonas.stats_zonas,
-            # Dados da estratégia ML
             'ml_historico': list(st.session_state.sistema.estrategia_ml.historico),
             'ml_contador_sorteios': st.session_state.sistema.estrategia_ml.contador_sorteios,
             'ml_sequencias_padroes': st.session_state.sistema.estrategia_ml.sequencias_padroes,
             'ml_metricas_padroes': st.session_state.sistema.estrategia_ml.metricas_padroes,
             'estrategia_selecionada': st.session_state.sistema.estrategia_selecionada,
-            # Dados das combinações dinâmicas
             'sistema_historico_combinacoes': st.session_state.sistema.historico_combinacoes,
             'sistema_combinacoes_quentes': st.session_state.sistema.combinacoes_quentes,
             'sistema_combinacoes_frias': st.session_state.sistema.combinacoes_frias,
-            # 🎯 NOVO: Dados do sistema de tendências
             'sistema_tendencias_historico': list(st.session_state.sistema.sistema_tendencias.historico_tendencias),
             'sistema_tendencias_estado': st.session_state.sistema.sistema_tendencias.estado_tendencia,
             'sistema_tendencias_ativa': st.session_state.sistema.sistema_tendencias.tendencia_ativa,
@@ -107,7 +102,6 @@ def carregar_sessao():
                 st.session_state.sistema.sequencia_erros = session_data.get('sistema_sequencia_erros', 0)
                 st.session_state.sistema.ultima_estrategia_erro = session_data.get('sistema_ultima_estrategia_erro', '')
                 
-                # NOVO: Carregar dados da estratégia de 3 acertos
                 st.session_state.sistema.sequencia_acertos = session_data.get('sistema_sequencia_acertos', 0)
                 st.session_state.sistema.ultima_combinacao_acerto = session_data.get('sistema_ultima_combinacao_acerto', [])
                 st.session_state.sistema.historico_combinacoes_acerto = session_data.get('sistema_historico_combinacoes_acerto', [])
@@ -142,7 +136,6 @@ def carregar_sessao():
                     'historico_validacao': []
                 })
                 
-                # 🎯 NOVO: Carregar dados do sistema de tendências
                 tendencias_historico = session_data.get('sistema_tendencias_historico', [])
                 st.session_state.sistema.sistema_tendencias.historico_tendencias = deque(tendencias_historico, maxlen=50)
                 st.session_state.sistema.sistema_tendencias.estado_tendencia = session_data.get('sistema_tendencias_estado', 'aguardando')
@@ -259,35 +252,24 @@ def enviar_alerta_numeros_simplificado(previsao):
         logging.error(f"Erro ao enviar alerta simplificado: {e}")
 
 def enviar_resultado_super_simplificado(numero_real, acerto, nome_estrategia, zona_acertada=None):
-    """Envia notificação de resultado super simplificado"""
+    """Envia notificação de resultado super simplificado - CORRIGIDO"""
     try:
+        # CORREÇÃO: Verificar zona acertada se não foi fornecida
+        if not zona_acertada and acerto:
+            sistema = st.session_state.sistema
+            if 'ML' in nome_estrategia or 'Machine Learning' in nome_estrategia:
+                for zona, numeros in sistema.estrategia_ml.numeros_zonas_ml.items():
+                    if numero_real in numeros:
+                        zona_acertada = zona
+                        break
+            else:
+                for zona, numeros in sistema.estrategia_zonas.numeros_zonas.items():
+                    if numero_real in numeros:
+                        zona_acertada = zona
+                        break
+        
         if acerto:
-            if 'Zonas' in nome_estrategia and zona_acertada:
-                if '+' in zona_acertada:
-                    zonas = zona_acertada.split('+')
-                    nucleos = []
-                    for zona in zonas:
-                        if zona == 'Vermelha':
-                            nucleos.append("7")
-                        elif zona == 'Azul':
-                            nucleos.append("10")
-                        elif zona == 'Amarela':
-                            nucleos.append("2")
-                        else:
-                            nucleos.append(zona)
-                    nucleo_str = "+".join(nucleos)
-                    mensagem = f"✅ Acerto Núcleos {nucleo_str}\n🎲 Número: {numero_real}"
-                else:
-                    if zona_acertada == 'Vermelha':
-                        nucleo = "7"
-                    elif zona_acertada == 'Azul':
-                        nucleo = "10"
-                    elif zona_acertada == 'Amarela':
-                        nucleo = "2"
-                    else:
-                        nucleo = zona_acertada
-                    mensagem = f"✅ Acerto Núcleo {nucleo}\n🎲 Número: {numero_real}"
-            elif 'ML' in nome_estrategia and zona_acertada:
+            if zona_acertada:
                 if '+' in zona_acertada:
                     zonas = zona_acertada.split('+')
                     nucleos = []
@@ -315,7 +297,25 @@ def enviar_resultado_super_simplificado(numero_real, acerto, nome_estrategia, zo
             else:
                 mensagem = f"✅ Acerto\n🎲 Número: {numero_real}"
         else:
-            mensagem = f"❌ Erro\n🎲 Número: {numero_real}"
+            # CORREÇÃO: Mostrar em qual zona o número caiu mesmo no erro
+            sistema = st.session_state.sistema
+            zona_real = None
+            if 'ML' in nome_estrategia or 'Machine Learning' in nome_estrategia:
+                for zona, numeros in sistema.estrategia_ml.numeros_zonas_ml.items():
+                    if numero_real in numeros:
+                        zona_real = zona
+                        break
+            else:
+                for zona, numeros in sistema.estrategia_zonas.numeros_zonas.items():
+                    if numero_real in numeros:
+                        zona_real = zona
+                        break
+            
+            if zona_real:
+                nucleo = "7" if zona_real == 'Vermelha' else "10" if zona_real == 'Azul' else "2"
+                mensagem = f"❌ Erro - Número: {numero_real}\n📍 Caiu na Zona {zona_real} (Núcleo {nucleo})"
+            else:
+                mensagem = f"❌ Erro\n🎲 Número: {numero_real}"
         
         st.toast(f"🎲 Resultado", icon="✅" if acerto else "❌")
         st.success(f"📢 {mensagem}") if acerto else st.error(f"📢 {mensagem}")
@@ -358,7 +358,6 @@ def enviar_rotacao_automatica(estrategia_anterior, estrategia_nova):
     except Exception as e:
         logging.error(f"Erro ao enviar rotação: {e}")
 
-# NOVA FUNÇÃO: Notificação para rotação por 3 acertos
 def enviar_rotacao_por_acertos_combinacoes(combinacao_anterior, combinacao_nova):
     """Envia notificação de rotação por acertos em combinações"""
     try:
@@ -418,7 +417,7 @@ class SistemaTendencias:
     def __init__(self):
         self.historico_tendencias = deque(maxlen=50)
         self.tendencia_ativa = None
-        self.estado_tendencia = "aguardando"  # aguardando, formando, ativa, enfraquecendo, morta
+        self.estado_tendencia = "aguardando"
         self.contador_confirmacoes = 0
         self.contador_erros_tendencia = 0
         self.contador_acertos_tendencia = 0
@@ -428,57 +427,33 @@ class SistemaTendencias:
         self.max_operacoes_por_tendencia = 4
         
     def analisar_tendencia(self, zonas_rankeadas, acerto_ultima=False, zona_acertada=None):
-        """
-        Analisa a tendência atual baseado no fluxograma
-        
-        Retorna: {
-            'estado': 'aguardando'|'formando'|'ativa'|'enfraquecendo'|'morta',
-            'zona_dominante': str,
-            'confianca': float,
-            'acao': 'operar'|'aguardar'|'parar',
-            'mensagem': str
-        }
-        """
         if not zonas_rankeadas or len(zonas_rankeadas) < 2:
             return self._criar_resposta_tendencia("aguardando", None, "Aguardando dados suficientes")
         
         zona_top1, score_top1 = zonas_rankeadas[0]
         zona_top2, score_top2 = zonas_rankeadas[1] if len(zonas_rankeadas) > 1 else (None, 0)
         
-        # Registrar zona dominante atual
         self.historico_zonas_dominantes.append(zona_top1)
         
-        # 1. VERIFICAR SE TENDÊNCIA ESTÁ SE FORMANDO
         if self.estado_tendencia in ["aguardando", "formando"]:
             return self._analisar_formacao_tendencia(zona_top1, zona_top2, score_top1, zonas_rankeadas)
-        
-        # 2. VERIFICAR SE TENDÊNCIA ESTÁ ATIVA
         elif self.estado_tendencia == "ativa":
             return self._analisar_tendencia_ativa(zona_top1, zona_top2, acerto_ultima, zona_acertada)
-        
-        # 3. VERIFICAR SE TENDÊNCIA ESTÁ ENFRAQUECENDO
         elif self.estado_tendencia == "enfraquecendo":
             return self._analisar_tendencia_enfraquecendo(zona_top1, zona_top2, acerto_ultima, zona_acertada)
-        
-        # 4. VERIFICAR SE TENDÊNCIA ESTÁ MORTA
         elif self.estado_tendencia == "morta":
             return self._analisar_reinicio_tendencia(zona_top1, zonas_rankeadas)
         
         return self._criar_resposta_tendencia("aguardando", None, "Estado não reconhecido")
     
     def _analisar_formacao_tendencia(self, zona_top1, zona_top2, score_top1, zonas_rankeadas):
-        """Etapa 2 do fluxograma - Formação da Tendência"""
-        
-        # Verificar se a mesma zona aparece repetidamente
         freq_zona_top1 = list(self.historico_zonas_dominantes).count(zona_top1)
         frequencia_minima = 3 if len(self.historico_zonas_dominantes) >= 5 else 2
-        
-        # Verificar dispersão (se outras zonas estão fracas)
         dispersao = self._calcular_dispersao_zonas(zonas_rankeadas)
         
         if (freq_zona_top1 >= frequencia_minima and 
-            score_top1 >= 25 and  # Score mínimo para considerar dominante
-            dispersao <= 0.6):    # Baixa dispersão = zonas concentradas
+            score_top1 >= 25 and
+            dispersao <= 0.6):
             
             if self.estado_tendencia == "aguardando":
                 self.estado_tendencia = "formando"
@@ -510,12 +485,8 @@ class SistemaTendencias:
         )
     
     def _analisar_tendencia_ativa(self, zona_top1, zona_top2, acerto_ultima, zona_acertada):
-        """Etapa 3-4 do fluxograma - Tendência Ativa e Hora de Operar"""
-        
-        # Verificar se ainda é a mesma zona dominante
         mesma_zona = zona_top1 == self.tendencia_ativa
         
-        # Atualizar contadores baseado no último resultado
         if acerto_ultima and zona_acertada == self.tendencia_ativa:
             self.contador_acertos_tendencia += 1
             self.contador_erros_tendencia = 0
@@ -524,7 +495,6 @@ class SistemaTendencias:
         
         self.rodadas_operando += 1
         
-        # 🔥 HORA DE OPERAR (se ainda dentro dos limites)
         if (self.contador_acertos_tendencia >= 1 and 
             self.contador_erros_tendencia == 0 and
             self.rodadas_operando <= self.max_operacoes_por_tendencia):
@@ -534,7 +504,6 @@ class SistemaTendencias:
             
             return self._criar_resposta_tendencia("ativa", self.tendencia_ativa, mensagem, acao)
         
-        # ⚠️ VERIFICAR ENFRAQUECIMENTO
         sinais_enfraquecimento = self._detectar_enfraquecimento(zona_top1, zona_top2, acerto_ultima)
         
         if sinais_enfraquecimento:
@@ -544,7 +513,6 @@ class SistemaTendencias:
                 f"⚠️ Tendência enfraquecendo - {sinais_enfraquecimento}"
             )
         
-        # 🟥 VERIFICAR SE TENDÊNCIA MORREU
         if self._detectar_morte_tendencia(zona_top1):
             self.estado_tendencia = "morta"
             return self._criar_resposta_tendencia(
@@ -558,14 +526,10 @@ class SistemaTendencias:
         )
     
     def _analisar_tendencia_enfraquecendo(self, zona_top1, zona_top2, acerto_ultima, zona_acertada):
-        """Etapa 5 do fluxograma - Tendência Enfraquecendo"""
-        
-        # Atualizar contadores
         if acerto_ultima and zona_acertada == self.tendencia_ativa:
             self.contador_acertos_tendencia += 1
             self.contador_erros_tendencia = 0
             
-            # Se recuperou, voltar para ativa
             if self.contador_acertos_tendencia >= 2:
                 self.estado_tendencia = "ativa"
                 return self._criar_resposta_tendencia(
@@ -575,7 +539,6 @@ class SistemaTendencias:
         elif not acerto_ultima:
             self.contador_erros_tendencia += 1
         
-        # 🟥 VERIFICAR MORTE DEFINITIVA
         if self._detectar_morte_tendencia(zona_top1):
             self.estado_tendencia = "morta"
             return self._criar_resposta_tendencia(
@@ -589,13 +552,9 @@ class SistemaTendencias:
         )
     
     def _analisar_reinicio_tendencia(self, zona_top1, zonas_rankeadas):
-        """Etapa 7 do fluxograma - Reinício e Nova Tendência"""
-        
-        # Aguardar rodadas suficientes após morte da tendência
         rodadas_desde_morte = len([z for z in self.historico_zonas_dominantes if z != self.tendencia_ativa])
         
-        if rodadas_desde_morte >= 8:  # Aguardar 8-10 rodadas
-            # Verificar se nova tendência está se formando
+        if rodadas_desde_morte >= 8:
             freq_zona_atual = list(self.historico_zonas_dominantes).count(zona_top1)
             dispersao = self._calcular_dispersao_zonas(zonas_rankeadas)
             
@@ -615,63 +574,51 @@ class SistemaTendencias:
         )
     
     def _detectar_enfraquecimento(self, zona_top1, zona_top2, acerto_ultima):
-        """Detecta sinais de enfraquecimento da tendência"""
         sinais = []
         
-        # 1. Zona dominante saindo do Top 1
         if zona_top1 != self.tendencia_ativa:
             sinais.append("zona saiu do Top 1")
         
-        # 2. Nova zona aparecendo forte no Top 2
         if (zona_top2 and zona_top2 != self.tendencia_ativa and 
             zona_top2 not in [self.tendencia_ativa, zona_top1]):
             sinais.append("nova zona no Top 2")
         
-        # 3. Padrão de alternância (acerta/erra)
         if self.contador_erros_tendencia > 0 and self.contador_acertos_tendencia > 0:
             total_operacoes = self.contador_acertos_tendencia + self.contador_erros_tendencia
             if total_operacoes >= 3 and self.contador_erros_tendencia >= total_operacoes * 0.4:
                 sinais.append("padrão acerta/erra")
         
-        # 4. Muitas operações já realizadas
         if self.rodadas_operando >= self.max_operacoes_por_tendencia:
             sinais.append("máximo de operações atingido")
         
         return " | ".join(sinais) if sinais else None
     
     def _detectar_morte_tendencia(self, zona_top1):
-        """Detecta se a tendência morreu completamente"""
-        
-        # 1. Dois erros seguidos
         if self.contador_erros_tendencia >= 2:
             return True
         
-        # 2. Zona dominante sumiu dos primeiros lugares
         if (zona_top1 != self.tendencia_ativa and 
             self.tendencia_ativa not in list(self.historico_zonas_dominantes)[-3:]):
             return True
         
-        # 3. Muitas zonas diferentes aparecendo
         zonas_recentes = list(self.historico_zonas_dominantes)[-5:]
         zonas_unicas = len(set(zonas_recentes))
         if len(zonas_recentes) >= 3 and zonas_unicas >= 3:
             return True
         
-        # 4. Taxa de acertos baixa
         total_tentativas = self.contador_acertos_tendencia + self.contador_erros_tendencia
         if total_tentativas >= 3:
             taxa_acertos = self.contador_acertos_tendencia / total_tentativas
-            if taxa_acertos < 0.5:  # Menos de 50% de acertos
+            if taxa_acertos < 0.5:
                 return True
         
         return False
     
     def _calcular_dispersao_zonas(self, zonas_rankeadas):
-        """Calcula o nível de dispersão entre as zonas (0-1, onde 0 é concentrado, 1 é disperso)"""
         if not zonas_rankeadas:
             return 1.0
         
-        scores = [score for _, score in zonas_rankeadas[:4]]  # Top 4 zonas
+        scores = [score for _, score in zonas_rankeadas[:4]]
         if not scores:
             return 1.0
         
@@ -679,15 +626,11 @@ class SistemaTendencias:
         if max_score == 0:
             return 1.0
         
-        # Normalizar scores
         scores_normalizados = [score / max_score for score in scores]
-        
-        # Dispersão é o desvio padrão dos scores normalizados
         dispersao = np.std(scores_normalizados) if len(scores_normalizados) > 1 else 0
         return dispersao
     
     def _criar_resposta_tendencia(self, estado, zona_dominante, mensagem, acao="aguardar"):
-        """Cria resposta padronizada da análise de tendência"""
         return {
             'estado': estado,
             'zona_dominante': zona_dominante,
@@ -703,7 +646,6 @@ class SistemaTendencias:
         }
     
     def _calcular_confianca_tendencia(self, estado):
-        """Calcula nível de confiança baseado no estado da tendência"""
         confiancas = {
             'aguardando': 0.1,
             'formando': 0.4,
@@ -714,7 +656,6 @@ class SistemaTendencias:
         return confiancas.get(estado, 0.0)
     
     def get_resumo_tendencia(self):
-        """Retorna resumo atual do estado da tendência"""
         return {
             'estado': self.estado_tendencia,
             'zona_ativa': self.tendencia_ativa,
@@ -915,9 +856,6 @@ class MLRoletaOtimizada:
     ):
         self.roleta = roleta_obj
         self.min_training_samples = min_training_samples
-        # Piso de linhas de treino geradas (não confundir com min_training_samples,
-        # que é o mínimo de NÚMEROS no histórico). Antes disso estava fixo em 50,
-        # o que na prática exigia bem mais que 36 números para o botão funcionar.
         self.min_training_rows = 10
         self.max_history = max_history
         self.retrain_every_n = retrain_every_n
@@ -935,19 +873,13 @@ class MLRoletaOtimizada:
         self.numeros = list(range(37))
         self.ensemble_size = 3
 
-        # ---- Configuração das Zonas (espelha EstrategiaZonasOtimizada) ----
-        # Mantido separado do estado ao vivo da estratégia de Zonas de propósito:
-        # as features de zona usadas no treino/inferência do ML são recalculadas
-        # 100% a partir da janela de histórico recebida em cada chamada, nunca a
-        # partir de self.stats_zonas de uma instância ao vivo. Isso evita
-        # vazamento de dados (usar estatísticas "do futuro" para treinar amostras
-        # do passado).
         self.zonas_config = {'Vermelha': 7, 'Azul': 10, 'Amarela': 2}
         self.zonas_quantidade = 6
         self.numeros_zonas = {
             nome: self.roleta.get_vizinhos_zona(central, self.zonas_quantidade)
             for nome, central in self.zonas_config.items()
         }
+        self.zona_labels = list(self.numeros_zonas.keys())
         self.janelas_zonas = {'curto': 12, 'medio': 24, 'longo': 48}
 
     def get_neighbors(self, numero, k=None):
@@ -965,17 +897,6 @@ class MLRoletaOtimizada:
             return [numero]
 
     def _extrair_features_zonas(self, historico):
-        """
-        Recalcula, de forma stateless, as métricas da estratégia de Zonas
-        (frequência por janela, performance histórica, sequência atual/máxima
-        e o score de ranqueamento usado por EstrategiaZonasOtimizada.get_zona_score)
-        usando SOMENTE a fatia de histórico recebida.
-
-        Isso é o que garante que a mesma lógica sirva tanto para treino
-        (chamada com historico_completo[:i] para cada amostra i) quanto para
-        inferência (chamada com o histórico completo até o momento), sem
-        misturar estado acumulado em tempo real da estratégia de Zonas.
-        """
         N = len(historico)
         feats = []
         names = []
@@ -990,7 +911,6 @@ class MLRoletaOtimizada:
             acertos = sum(pertence)
             performance_media = (acertos / tentativas * 100) if tentativas > 0 else 0.0
 
-            # sequência atual: corrida de acertos consecutivos terminando no último elemento
             sequencia_atual = 0
             for v in reversed(pertence):
                 if v == 1:
@@ -998,7 +918,6 @@ class MLRoletaOtimizada:
                 else:
                     break
 
-            # sequência máxima observada na janela
             sequencia_maxima = 0
             corrida = 0
             for v in pertence:
@@ -1014,7 +933,6 @@ class MLRoletaOtimizada:
                 else:
                     props_janela[nome_j] = 0.0
 
-            # mesmo esquema de pesos de EstrategiaZonasOtimizada.get_zona_score
             score = 0.0
             score += prop_geral * 25
             score += props_janela['curto'] * 35
@@ -1055,7 +973,6 @@ class MLRoletaOtimizada:
                 f"zona_{zona}_score",
             ])
 
-        # sinal derivado: zona vencedora (one-hot) e margem de confiança do ranking
         if scores:
             ranking = sorted(scores.items(), key=lambda x: x[1], reverse=True)
             zona_vencedora = ranking[0][0]
@@ -1155,7 +1072,6 @@ class MLRoletaOtimizada:
             features.append(np.mean(diffs) if len(diffs)>0 else 0.0); names.append("media_transicoes")
             features.append(np.std(diffs) if len(diffs)>1 else 0.0); names.append("std_transicoes")
 
-            # ---- Features da estratégia de Zonas (ver _extrair_features_zonas) ----
             feats_zonas, names_zonas = self._extrair_features_zonas(historico)
             features.extend(feats_zonas)
             names.extend(names_zonas)
@@ -1166,6 +1082,12 @@ class MLRoletaOtimizada:
         except Exception as e:
             logging.error(f"[extrair_features] Erro: {e}")
             return None, None
+
+    def _numero_para_zona_idx(self, numero):
+        for idx, zona in enumerate(self.zona_labels):
+            if numero in self.numeros_zonas[zona]:
+                return idx
+        return None
 
     def preparar_dados_treinamento(self, historico_completo):
         historico_completo = list(historico_completo)
@@ -1182,15 +1104,21 @@ class MLRoletaOtimizada:
             feats, _ = self.extrair_features(janela)
             if feats is None:
                 continue
+            zona_idx = self._numero_para_zona_idx(historico_completo[i])
+            if zona_idx is None:
+                continue
             X.append(feats)
-            y.append(historico_completo[i])
+            y.append(zona_idx)
         
         if len(X) == 0:
             return np.array([]), np.array([])
         
         class_counts = Counter(y)
-        if len(class_counts) < 10:
-            logging.warning(f"Pouca variedade de classes: apenas {len(class_counts)} números únicos")
+        if len(class_counts) < len(self.zona_labels) or len(X) < 15:
+            logging.warning(
+                f"Dados insuficientes para treino por zona: {len(class_counts)}/{len(self.zona_labels)} "
+                f"zonas presentes, {len(X)} amostras"
+            )
             return np.array([]), np.array([])
         
         return np.array(X), np.array(y)
@@ -1327,7 +1255,7 @@ class MLRoletaOtimizada:
                         probs.append(m.predict_proba(X_val))
                     else:
                         preds = m.predict(X_val)
-                        prob = np.zeros((len(preds), len(self.numeros)))
+                        prob = np.zeros((len(preds), len(self.zona_labels)))
                         for i, p in enumerate(preds):
                             prob[i, p] = 1.0
                         probs.append(prob)
@@ -1381,7 +1309,7 @@ class MLRoletaOtimizada:
 
     def _ensemble_predict_proba(self, X_scaled):
         if not self.models:
-            return np.ones((len(X_scaled), len(self.numeros))) / len(self.numeros)
+            return np.ones((len(X_scaled), len(self.zona_labels))) / len(self.zona_labels)
 
         probs = []
         for m in self.models:
@@ -1389,13 +1317,13 @@ class MLRoletaOtimizada:
                 probs.append(m.predict_proba(X_scaled))
             else:
                 preds = m.predict(X_scaled)
-                prob = np.zeros((len(preds), len(self.numeros)))
+                prob = np.zeros((len(preds), len(self.zona_labels)))
                 for i, p in enumerate(preds):
                     prob[i, p] = 1.0
                 probs.append(prob)
         return np.mean(probs, axis=0)
 
-    def prever_proximo_numero(self, historico, top_k: int = 25):
+    def prever_proxima_zona(self, historico):
         if not self.is_trained:
             return None, "Modelo não treinado"
 
@@ -1403,10 +1331,6 @@ class MLRoletaOtimizada:
         if feats is None:
             return None, "Features insuficientes"
 
-        # Guarda de compatibilidade: um modelo salvo em disco antes da
-        # introdução das features de Zonas tem um número diferente de
-        # colunas. Em vez de deixar o scaler.transform estourar exceção,
-        # invalidamos o modelo em memória e pedimos retreino explícito.
         n_features_esperado = getattr(self.scaler, "n_features_in_", len(feats))
         if len(feats) != n_features_esperado:
             self.is_trained = False
@@ -1419,25 +1343,17 @@ class MLRoletaOtimizada:
         Xs_scaled = self.scaler.transform(Xs)
         try:
             probs = self._ensemble_predict_proba(Xs_scaled)[0]
-            top_idx = np.argsort(probs)[-top_k:][::-1]
-            top = [(int(idx), float(probs[idx])) for idx in top_idx]
-            return top, "Previsão ML realizada"
+            if len(probs) != len(self.zona_labels):
+                self.is_trained = False
+                return None, (
+                    f"Modelo salvo prevê {len(probs)} classes, mas há "
+                    f"{len(self.zona_labels)} zonas configuradas. Retreine o modelo."
+                )
+            resultado = [(self.zona_labels[idx], float(p)) for idx, p in enumerate(probs)]
+            resultado.sort(key=lambda x: x[1], reverse=True)
+            return resultado, "Previsão de zona ML realizada"
         except Exception as e:
             return None, f"Erro na previsão: {str(e)}"
-
-    def prever_blocos_vizinhos(self, historico, k_neighbors: int = 2, top_blocks: int = 5):
-        pred, msg = self.prever_proximo_numero(historico, top_k=37)
-        if pred is None:
-            return None, msg
-        prob = {num: p for num, p in pred}
-        blocks = []
-        for num in range(37):
-            neigh = self.get_neighbors(num, k=k_neighbors)
-            agg_prob = sum(prob.get(n, 0.0) for n in neigh)
-            blocks.append((num, tuple(neigh), agg_prob))
-        blocks_sorted = sorted(blocks, key=lambda x: x[2], reverse=True)[:top_blocks]
-        formatted = [{"central": b[0], "vizinhos": list(b[1]), "prob": float(b[2])} for b in blocks_sorted]
-        return formatted, "Previsão de blocos realizada"
 
     def registrar_resultado(self, historico, previsao_top, resultado_real):
         try:
@@ -1476,7 +1392,7 @@ class MLRoletaOtimizada:
         }
 
 # =============================
-# ESTRATÉGIA DAS ZONAS ATUALIZADA - COM APRENDIZADO DINÂMICO DE COMBINAÇões
+# ESTRATÉGIA DAS ZONAS ATUALIZADA - COM APRENDIZADO DINÂMICO DE COMBINAÇÕES
 # =============================
 class EstrategiaZonasOtimizada:
     def __init__(self):
@@ -2253,19 +2169,6 @@ class EstrategiaML:
         elif valor >= 0.45: return 'Baixa'
         else: return 'Muito Baixa'
 
-    def analisar_distribuicao_zonas_rankeadas(self, top_25_numeros):
-        contagem_zonas = {}
-        
-        for zona, numeros in self.numeros_zonas_ml.items():
-            count = sum(1 for num in top_25_numeros if num in numeros)
-            contagem_zonas[zona] = count
-        
-        if not contagem_zonas:
-            return None
-            
-        zonas_rankeadas = sorted(contagem_zonas.items(), key=lambda x: x[1], reverse=True)
-        return zonas_rankeadas
-
     def analisar_ml_com_inversao(self):
         if len(self.historico) < 10:
             return None
@@ -2278,111 +2181,98 @@ class EstrategiaML:
         if len(historico_numeros) < 10:
             return None
 
-        previsao_ml, msg_ml = self.ml.prever_proximo_numero(historico_numeros, top_k=25)
-        
-        if previsao_ml:
-            top_25_numeros = [num for num, prob in previsao_ml[:25]]
-            
-            distribuicao_zonas = self.analisar_distribuicao_zonas_rankeadas(top_25_numeros)
-            
-            if not distribuicao_zonas:
-                return None
-                
-            distribuicao_dict = dict(distribuicao_zonas)
-            distribuicao_ajustada = self.aplicar_padroes_na_previsao(distribuicao_dict)
-            
-            zonas_rankeadas_ajustadas = sorted(distribuicao_ajustada.items(), key=lambda x: x[1], reverse=True)
-            
-            zona_primaria, contagem_primaria = zonas_rankeadas_ajustadas[0]
-            
-            if contagem_primaria < 7:
-                return None
-            
-            zona_secundaria = None
-            contagem_secundaria = 0
-            
-            if len(zonas_rankeadas_ajustadas) > 1:
-                zona_secundaria, contagem_secundaria = zonas_rankeadas_ajustadas[1]
+        previsao_zonas, msg_ml = self.ml.prever_proxima_zona(historico_numeros)
 
-                # Sempre prevê as DUAS zonas líderes (não fica mais condicionado
-                # a contagem_secundaria >= 5 — a segunda zona do ranking entra
-                # de qualquer forma).
-                numeros_primarios = self.numeros_zonas_ml[zona_primaria]
-                numeros_secundarios = self.numeros_zonas_ml[zona_secundaria]
+        if not previsao_zonas:
+            return None
 
-                numeros_combinados = list(set(numeros_primarios + numeros_secundarios))
+        distribuicao_dict = {zona: round(prob * 25) for zona, prob in previsao_zonas}
+        distribuicao_ajustada = self.aplicar_padroes_na_previsao(distribuicao_dict)
 
-                if len(numeros_combinados) > 15:
-                    numeros_combinados = self.sistema_selecao.selecionar_melhores_15_numeros(
-                        numeros_combinados, self.historico, "ML"
-                    )
+        zonas_rankeadas_ajustadas = sorted(distribuicao_ajustada.items(), key=lambda x: x[1], reverse=True)
 
-                confianca = self.calcular_confianca_com_padroes(distribuicao_ajustada, zona_primaria)
+        zona_primaria, contagem_primaria = zonas_rankeadas_ajustadas[0]
 
-                padroes_aplicados = [p for p in self.sequencias_padroes['padroes_detectados']
-                                   if p['zona'] in [zona_primaria, zona_secundaria] and
-                                   len(self.historico) - p['detectado_em'] <= 15]
+        if contagem_primaria < 7:
+            return None
 
-                gatilho_extra = ""
-                if padroes_aplicados:
-                    gatilho_extra = f" | Padrões: {len(padroes_aplicados)}"
+        zona_secundaria = None
+        contagem_secundaria = 0
 
-                contagem_original_primaria = distribuicao_dict[zona_primaria]
-                contagem_original_secundaria = distribuicao_dict.get(zona_secundaria, 0)
+        if len(zonas_rankeadas_ajustadas) > 1:
+            zona_secundaria, contagem_secundaria = zonas_rankeadas_ajustadas[1]
 
-                gatilho = f'ML CatBoost - Zona {zona_primaria} ({contagem_original_primaria}→{contagem_primaria}/25) + Zona {zona_secundaria} ({contagem_original_secundaria}→{contagem_secundaria}/25) | SEL: {len(numeros_combinados)} números{gatilho_extra}'
+            numeros_primarios = self.numeros_zonas_ml[zona_primaria]
+            numeros_secundarios = self.numeros_zonas_ml[zona_secundaria]
 
-                return {
-                    'nome': 'Machine Learning - CatBoost (Duplo)',
-                    'numeros_apostar': numeros_combinados,
-                    'gatilho': gatilho,
-                    'confianca': confianca,
-                    'previsao_ml': previsao_ml,
-                    'zona_ml': f'{zona_primaria}+{zona_secundaria}',
-                    'distribuicao': distribuicao_ajustada,
-                    'padroes_aplicados': len(padroes_aplicados),
-                    'zonas_envolvidas': [zona_primaria, zona_secundaria],
-                    'tipo': 'dupla',
-                    'selecao_inteligente': True
-                }
+            numeros_combinados = list(set(numeros_primarios + numeros_secundarios))
 
-            # Fallback: só cai aqui se por algum motivo existir apenas 1 zona
-            # no ranking (não deveria acontecer com as 3 zonas padrão).
-            numeros_zona = self.numeros_zonas_ml[zona_primaria]
-            
-            if len(numeros_zona) > 15:
-                numeros_zona = self.sistema_selecao.selecionar_melhores_15_numeros(
-                    numeros_zona, self.historico, "ML"
+            if len(numeros_combinados) > 15:
+                numeros_combinados = self.sistema_selecao.selecionar_melhores_15_numeros(
+                    numeros_combinados, self.historico, "ML"
                 )
-            
-            contagem_original = distribuicao_dict[zona_primaria]
-            contagem_ajustada = contagem_primaria
-            
+
             confianca = self.calcular_confianca_com_padroes(distribuicao_ajustada, zona_primaria)
-            
-            padroes_aplicados = [p for p in self.sequencias_padroes['padroes_detectados'] 
-                               if p['zona'] == zona_primaria and 
+
+            padroes_aplicados = [p for p in self.sequencias_padroes['padroes_detectados']
+                               if p['zona'] in [zona_primaria, zona_secundaria] and
                                len(self.historico) - p['detectado_em'] <= 15]
-            
+
             gatilho_extra = ""
             if padroes_aplicados:
                 gatilho_extra = f" | Padrões: {len(padroes_aplicados)}"
-            
+
+            prob_primaria_pct = dict(previsao_zonas)[zona_primaria] * 100
+            prob_secundaria_pct = dict(previsao_zonas)[zona_secundaria] * 100
+
+            gatilho = f'ML CatBoost (Zonas) - {zona_primaria} ({prob_primaria_pct:.1f}%) + {zona_secundaria} ({prob_secundaria_pct:.1f}%) | SEL: {len(numeros_combinados)} números{gatilho_extra}'
+
             return {
-                'nome': 'Machine Learning - CatBoost',
-                'numeros_apostar': numeros_zona,
-                'gatilho': f'ML CatBoost - Zona {zona_primaria} ({contagem_original}→{contagem_ajustada}/25) | SEL: {len(numeros_zona)} números{gatilho_extra}',
+                'nome': 'Machine Learning - CatBoost (Duplo)',
+                'numeros_apostar': numeros_combinados,
+                'gatilho': gatilho,
                 'confianca': confianca,
-                'previsao_ml': previsao_ml,
-                'zona_ml': zona_primaria,
+                'previsao_zonas_ml': previsao_zonas,
+                'zona_ml': f'{zona_primaria}+{zona_secundaria}',
                 'distribuicao': distribuicao_ajustada,
                 'padroes_aplicados': len(padroes_aplicados),
-                'zonas_envolvidas': [zona_primaria],
-                'tipo': 'unica',
-                'selecao_inteligente': len(numeros_zona) < len(self.numeros_zonas_ml[zona_primaria])
+                'zonas_envolvidas': [zona_primaria, zona_secundaria],
+                'tipo': 'dupla',
+                'selecao_inteligente': True
             }
+
+        numeros_zona = self.numeros_zonas_ml[zona_primaria]
         
-        return None
+        if len(numeros_zona) > 15:
+            numeros_zona = self.sistema_selecao.selecionar_melhores_15_numeros(
+                numeros_zona, self.historico, "ML"
+            )
+        
+        confianca = self.calcular_confianca_com_padroes(distribuicao_ajustada, zona_primaria)
+        
+        padroes_aplicados = [p for p in self.sequencias_padroes['padroes_detectados'] 
+                           if p['zona'] == zona_primaria and 
+                           len(self.historico) - p['detectado_em'] <= 15]
+        
+        gatilho_extra = ""
+        if padroes_aplicados:
+            gatilho_extra = f" | Padrões: {len(padroes_aplicados)}"
+
+        prob_primaria_pct = dict(previsao_zonas)[zona_primaria] * 100
+        
+        return {
+            'nome': 'Machine Learning - CatBoost',
+            'numeros_apostar': numeros_zona,
+            'gatilho': f'ML CatBoost (Zonas) - {zona_primaria} ({prob_primaria_pct:.1f}%) | SEL: {len(numeros_zona)} números{gatilho_extra}',
+            'confianca': confianca,
+            'previsao_zonas_ml': previsao_zonas,
+            'zona_ml': zona_primaria,
+            'distribuicao': distribuicao_ajustada,
+            'padroes_aplicados': len(padroes_aplicados),
+            'zonas_envolvidas': [zona_primaria],
+            'tipo': 'unica',
+            'selecao_inteligente': len(numeros_zona) < len(self.numeros_zonas_ml[zona_primaria])
+        }
 
     def analisar_ml(self):
         return self.analisar_ml_com_inversao()
@@ -2408,15 +2298,6 @@ class EstrategiaML:
             elif isinstance(item, (int, float)):
                 historico_numeros.append(int(item))
         return historico_numeros
-
-    def analisar_distribuicao_zonas(self, top_25_numeros):
-        contagem_zonas = {}
-        
-        for zona, numeros in self.numeros_zonas_ml.items():
-            count = sum(1 for num in top_25_numeros if num in numeros)
-            contagem_zonas[zona] = count
-        
-        return contagem_zonas if contagem_zonas else None
 
     def calcular_confianca_zona_ml(self, distribuicao):
         contagem = distribuicao['contagem']
@@ -2454,16 +2335,16 @@ class EstrategiaML:
             return "🤖 ML: Aguardando mais dados para análise"
         
         historico_numeros = self.extrair_numeros_historico()
-        previsao_ml, msg = self.ml.prever_proximo_numero(historico_numeros, top_k=25)
+        previsao_zonas, msg = self.ml.prever_proxima_zona(historico_numeros)
         
-        if previsao_ml:
+        if previsao_zonas:
             if self.ml.models:
                 primeiro_modelo = self.ml.models[0]
                 modelo_tipo = "CatBoost" if hasattr(primeiro_modelo, 'iterations') else "RandomForest"
             else:
                 modelo_tipo = "Não treinado"
             
-            analise = f"🤖 ANÁLISE ML - {modelo_tipo.upper()} (TOP 25):\n"
+            analise = f"🤖 ANÁLISE ML - {modelo_tipo.upper()} (previsão por zona):\n"
             analise += f"🔄 Treinamentos realizados: {self.ml.contador_treinamento}\n"
             analise += f"📊 Próximo treinamento: {15 - self.contador_sorteios} sorteios\n"
             analise += f"📈 Ensemble: {len(self.ml.models)} modelos\n"
@@ -2477,17 +2358,15 @@ class EstrategiaML:
                     idade = len(self.historico) - padrao['detectado_em']
                     analise += f"   📈 {padrao['zona']}: {padrao['tipo']} (há {idade} jogos)\n"
             
-            analise += "🎯 Previsões (Top 10):\n"
-            for i, (num, prob) in enumerate(previsao_ml[:10]):
-                analise += f"  {i+1}. Número {num}: {prob:.2%}\n"
-            
-            top_25_numeros = [num for num, prob in previsao_ml[:25]]
-            distribuicao = self.analisar_distribuicao_zonas(top_25_numeros)
-            
-            if distribuicao:
-                distribuicao_ajustada = self.aplicar_padroes_na_previsao(distribuicao)
-                
-                analise += f"\n🎯 DISTRIBUIÇÃO POR ZONAS (25 números):\n"
+            analise += "\n🎯 PROBABILIDADE POR ZONA (direto do modelo):\n"
+            for zona, prob in previsao_zonas:
+                analise += f"  📍 {zona}: {prob:.1%}\n"
+
+            distribuicao = {zona: round(prob * 25) for zona, prob in previsao_zonas}
+            distribuicao_ajustada = self.aplicar_padroes_na_previsao(distribuicao)
+
+            if distribuicao_ajustada:
+                analise += f"\n🎯 DISTRIBUIÇÃO AJUSTADA POR PADRÕES (escala /25):\n"
                 for zona, count in distribuicao_ajustada.items():
                     count_original = distribuicao[zona]
                     ajuste = count - count_original
@@ -2500,7 +2379,7 @@ class EstrategiaML:
                 analise += f"🔢 Números da zona: {sorted(self.numeros_zonas_ml[zona_vencedora])}\n"
                 analise += f"📈 Percentual: {(distribuicao_ajustada[zona_vencedora]/25)*100:.1f}%\n"
             else:
-                analise += "\n⚠️  Nenhuma zona com predominância suficiente (mínimo 7 números)\n"
+                analise += "\n⚠️  Nenhuma zona com predominância suficiente (mínimo 7/25)\n"
             
             return analise
         else:
@@ -2566,11 +2445,6 @@ class EstrategiaML:
 # =============================
 class SistemaRoletaCompleto:
     def __init__(self):
-        # estrategia_zonas é mantida apenas como infraestrutura interna:
-        # alimenta o ranking de zonas usado pelo sistema de tendências e pelas
-        # apostas "dupla" por combinação. Ela não gera mais uma previsão
-        # própria/selecionável — a única estratégia que prevê e é exibida é a ML,
-        # que já incorpora os sinais de zona como features (ver MLRoletaOtimizada).
         self.estrategia_zonas = EstrategiaZonasOtimizada()
         self.estrategia_ml = EstrategiaML()
         self.previsao_ativa = None
@@ -2581,28 +2455,23 @@ class SistemaRoletaCompleto:
         self.estrategia_selecionada = "ML"
         self.contador_sorteios_global = 0
         
-        # Sistema de rotação automática
         self.sequencia_erros = 0
         self.ultima_estrategia_erro = ""
         
-        # 🎯 NOVO: Sistema de rotação por 3 acertos em combinações
         self.sequencia_acertos = 0
-        self.ultima_combinacao_acerto = []  # Combinações que acertaram na sequência
-        self.historico_combinacoes_acerto = []  # Histórico das combinações que acertaram
+        self.ultima_combinacao_acerto = []
+        self.historico_combinacoes_acerto = []
         
-        # 🎯 NOVO: Sistema de combinações dinâmicas
-        self.historico_combinacoes = {}  # Combinações dinâmicas
-        self.combinacoes_quentes = []    # Combinações com bom desempenho recente
-        self.combinacoes_frias = []      # Combinações com mau desempenho recente
+        self.historico_combinacoes = {}
+        self.combinacoes_quentes = []
+        self.combinacoes_frias = []
         
-        # 🎯 NOVO: Definir todas as combinações possíveis de zonas
         self.todas_combinacoes_zonas = [
             ['Vermelha', 'Azul'],
             ['Vermelha', 'Amarela'], 
             ['Azul', 'Amarela']
         ]
         
-        # 🎯 ADICIONAR SISTEMA DE TENDÊNCIAS
         self.sistema_tendencias = SistemaTendencias()
 
     def set_estrategia(self, estrategia):
@@ -2613,11 +2482,9 @@ class SistemaRoletaCompleto:
         return self.estrategia_ml.treinar_modelo_ml(historico_completo)
 
     def atualizar_desempenho_combinacao(self, zonas_envolvidas, acerto):
-        """Atualiza desempenho de combinações de forma dinâmica"""
         if len(zonas_envolvidas) > 1:
             combinacao = tuple(sorted(zonas_envolvidas))
             
-            # Inicializar se não existe
             if combinacao not in self.historico_combinacoes:
                 self.historico_combinacoes[combinacao] = {
                     'acertos': 0, 
@@ -2637,14 +2504,11 @@ class SistemaRoletaCompleto:
                 dados['sequencia_acertos'] += 1
                 dados['sequencia_erros'] = 0
                 
-                # 🎯 NOVO: Registrar combinação que acertou para sequência
                 if combinacao not in self.ultima_combinacao_acerto:
                     self.ultima_combinacao_acerto.append(combinacao)
-                    # Manter apenas as últimas 3 combinações únicas
                     if len(self.ultima_combinacao_acerto) > 3:
                         self.ultima_combinacao_acerto.pop(0)
                 
-                # 🎯 NOVO: Adicionar ao histórico geral
                 self.historico_combinacoes_acerto.append(combinacao)
                 if len(self.historico_combinacoes_acerto) > 10:
                     self.historico_combinacoes_acerto.pop(0)
@@ -2653,20 +2517,15 @@ class SistemaRoletaCompleto:
                 dados['sequencia_erros'] += 1
                 dados['sequencia_acertos'] = 0
             
-            # Calcular eficiência
             if dados['total'] > 0:
                 dados['eficiencia'] = (dados['acertos'] / dados['total']) * 100
             
-            # 🎯 ATUALIZAR LISTAS DINÂMICAS
             self.atualizar_combinacoes_quentes_frias()
     
     def atualizar_combinacoes_quentes_frias(self):
-        """Atualiza dinamicamente as combinações quentes e frias"""
-        # Resetar listas
         self.combinacoes_quentes = []
         self.combinacoes_frias = []
         
-        # Analisar apenas combinações com pelo menos 2 tentativas
         combinacoes_ativas = {k: v for k, v in self.historico_combinacoes.items() 
                              if v['total'] >= 2}
         
@@ -2675,33 +2534,27 @@ class SistemaRoletaCompleto:
             total_jogos = dados['total']
             sequencia_acertos = dados['sequencia_acertos']
             
-            # 🎯 CRITÉRIOS PARA COMBINAÇÃO QUENTE
             if (eficiencia >= 50 or 
                 (eficiencia >= 40 and total_jogos >= 3) or
                 sequencia_acertos >= 2):
                 self.combinacoes_quentes.append(combinacao)
             
-            # 🎯 CRITÉRIOS PARA COMBINAÇÃO FRIA
             elif (eficiencia < 25 and total_jogos >= 3) or dados['sequencia_erros'] >= 2:
                 self.combinacoes_frias.append(combinacao)
     
     def get_combinacao_recomendada(self):
-        """Retorna a melhor combinação baseada em desempenho recente"""
         if not self.combinacoes_quentes:
             return None
         
-        # 🎯 PRIORIZAR COMBINAÇÕES COM SEQUÊNCIA DE ACERTOS
         combinacoes_com_sequencia = [
             (combo, dados) for combo, dados in self.historico_combinacoes.items()
             if combo in self.combinacoes_quentes and dados['sequencia_acertos'] >= 1
         ]
         
         if combinacoes_com_sequencia:
-            # Ordenar por sequência de acertos (maior primeiro)
             combinacoes_com_sequencia.sort(key=lambda x: x[1]['sequencia_acertos'], reverse=True)
             return combinacoes_com_sequencia[0][0]
         
-        # 🎯 SE NÃO HÁ SEQUÊNCIA, USAR EFICIÊNCIA
         combinacoes_eficientes = [
             (combo, dados) for combo, dados in self.historico_combinacoes.items()
             if combo in self.combinacoes_quentes
@@ -2714,34 +2567,27 @@ class SistemaRoletaCompleto:
         return None
 
     def get_combinacoes_alternativas(self, combinacao_evitar):
-        """🎯 NOVO: Retorna combinações alternativas excluindo as que acertaram recentemente"""
         combinacoes_disponiveis = []
         
         for combo in self.todas_combinacoes_zonas:
             combo_tuple = tuple(sorted(combo))
             
-            # Evitar a combinação atual
             if combo_tuple == combinacao_evitar:
                 continue
                 
-            # Evitar combinações que acertaram nos últimos 3 acertos
             if combo_tuple in self.ultima_combinacao_acerto:
                 continue
                 
-            # Evitar combinações frias
             if combo_tuple in self.combinacoes_frias:
                 continue
                 
-            # Verificar eficiência da combinação
             dados_combo = self.historico_combinacoes.get(combo_tuple, {})
             eficiencia = dados_combo.get('eficiencia', 0)
             total = dados_combo.get('total', 0)
             
-            # Priorizar combinações com boa eficiência ou poucos dados
-            if total == 0 or eficiencia >= 25:  # Reduzido de 30 para 25
+            if total == 0 or eficiencia >= 25:
                 combinacoes_disponiveis.append(combo_tuple)
     
-        # 🎯 SE NÃO ENCONTROU COMBINAÇÕES BOAS, USAR TODAS EXCETO A ATUAL
         if not combinacoes_disponiveis:
             for combo in self.todas_combinacoes_zonas:
                 combo_tuple = tuple(sorted(combo))
@@ -2751,11 +2597,9 @@ class SistemaRoletaCompleto:
         return combinacoes_disponiveis
 
     def deve_evitar_combinacao(self, combinacao):
-        """Verifica se deve evitar uma combinação específica"""
         if combinacao in self.combinacoes_frias:
             return True
         
-        # 🎯 EVITAR COMBINAÇÕES COM MAU DESEMPENHO HISTÓRICO
         dados = self.historico_combinacoes.get(combinacao, {})
         if dados and dados.get('total', 0) >= 3 and dados.get('eficiencia', 0) < 20:
             return True
@@ -2763,7 +2607,6 @@ class SistemaRoletaCompleto:
         return False
 
     def calcular_performance_estrategias(self):
-        """Calcula performance recente das estratégias"""
         performance = {}
         historico_recente = self.historico_desempenho[-10:] if len(self.historico_desempenho) >= 10 else self.historico_desempenho
         
@@ -2776,7 +2619,6 @@ class SistemaRoletaCompleto:
             if resultado['acerto']:
                 performance[estrategia]['acertos'] += 1
         
-        # Calcular percentuais
         for estrategia, dados in performance.items():
             if dados['total'] > 0:
                 performance[estrategia] = (dados['acertos'] / dados['total']) * 100
@@ -2786,30 +2628,22 @@ class SistemaRoletaCompleto:
         return performance
 
     def rotacionar_estrategia_automaticamente(self, acerto, nome_estrategia, zonas_envolvidas):
-        """Rotação baseada em desempenho de combinações específicas - COM NOVA REGRA DE 3 ACERTOS"""
-        
-        # Atualizar desempenho da combinação
         self.atualizar_desempenho_combinacao(zonas_envolvidas, acerto)
         
         if acerto:
-            # 🎯 NOVA REGRA: Contar acertos consecutivos
             self.sequencia_acertos += 1
             self.sequencia_erros = 0
             
-            # 🎯 NOVA REGRA: Rotação após 3 acertos seguidos na MESMA combinação
             if len(zonas_envolvidas) > 1:
                 combinacao_atual = tuple(sorted(zonas_envolvidas))
                 
-                # 🎯 VERIFICAR SE OS 3 ACERTOS FORAM NA MESMA COMBINAÇÃO
                 if self.sequencia_acertos >= 3:
-                    # Verificar se os últimos 3 acertos foram na mesma combinação
                     ultimos_3_acertos = []
                     for resultado in reversed(self.historico_desempenho[-3:]):
                         if resultado['acerto'] and resultado.get('zonas_envolvidas'):
                             ultima_combinacao = tuple(sorted(resultado['zonas_envolvidas']))
                             ultimos_3_acertos.append(ultima_combinacao)
                     
-                    # Se todos os últimos 3 acertos foram na mesma combinação
                     if (len(ultimos_3_acertos) >= 3 and 
                         all(combo == combinacao_atual for combo in ultimos_3_acertos)):
                         
@@ -2820,10 +2654,9 @@ class SistemaRoletaCompleto:
         
         else:
             self.sequencia_erros += 1
-            self.sequencia_acertos = 0  # Resetar sequência de acertos
+            self.sequencia_acertos = 0
             self.ultima_estrategia_erro = nome_estrategia
             
-            # 🎯 ROTAÇÃO RÁPIDA PARA COMBINAÇÕES FRIA
             if len(zonas_envolvidas) > 1:
                 combinacao = tuple(sorted(zonas_envolvidas))
                 
@@ -2831,37 +2664,30 @@ class SistemaRoletaCompleto:
                     logging.info(f"🚫 Combinação fria detectada: {combinacao} - Rotacionando")
                     return self.aplicar_rotacao_inteligente()
             
-            # 🎯 ROTAÇÃO PARA MÁ PERFORMANCE GERAL
             if self.sequencia_erros >= 2:
                 return self.aplicar_rotacao_inteligente()
                 
             return False
 
     def aplicar_rotacao_por_acertos_combinacoes(self, combinacao_atual):
-        """🎯 NOVA REGRA: Rotação após 3 acertos seguidos - alterna para outras combinações"""
-        
-        # 🎯 OBTER COMBINAÇÕES ALTERNATIVAS (excluindo as que acertaram recentemente)
         combinacoes_alternativas = self.get_combinacoes_alternativas(combinacao_atual)
         
         if not combinacoes_alternativas:
             logging.info("⚠️ Nenhuma combinação alternativa disponível - mantendo atual")
             return False
         
-        # 🎯 ESCOLHER A MELHOR COMBINAÇÃO ALTERNATIVA
         combinacao_escolhida = self.escolher_melhor_combinacao_alternativa(combinacoes_alternativas)
         
         if not combinacao_escolhida:
             logging.info("⚠️ Não foi possível escolher uma combinação alternativa")
             return False
         
-        # 🎯 FORÇAR A CRIAÇÃO DE UMA NOVA PREVISÃO COM A COMBINAÇÃO ALTERNATIVA
         success = self.criar_previsao_com_combinacao(combinacao_escolhida)
         
         if success:
-            self.sequencia_acertos = 0  # Resetar contador após rotação
-            self.ultima_combinacao_acerto = []  # Limpar histórico de combinações que acertaram
+            self.sequencia_acertos = 0
+            self.ultima_combinacao_acerto = []
             
-            # Enviar notificação especial
             enviar_rotacao_por_acertos_combinacoes(combinacao_atual, combinacao_escolhida)
             logging.info(f"🔄 ROTAÇÃO POR ACERTOS: {combinacao_atual} → {combinacao_escolhida}")
             return True
@@ -2869,11 +2695,9 @@ class SistemaRoletaCompleto:
         return False
 
     def criar_previsao_com_combinacao(self, combinacao):
-        """Cria uma nova previsão forçada com a combinação especificada"""
         try:
             zonas_list = list(combinacao)
             
-            # 🎯 CRIAR PREVISÃO FORÇADA COM A NOVA COMBINAÇÃO
             previsao_forcada = self.estrategia_zonas.criar_previsao_dupla(
                 zonas_list[0], 
                 zonas_list[1], 
@@ -2882,11 +2706,6 @@ class SistemaRoletaCompleto:
             
             if previsao_forcada:
                 self.previsao_ativa = previsao_forcada
-                # Continua na estratégia ML — a previsão dupla forçada usa os
-                # números da combinação de zonas escolhida, mas não troca a
-                # estratégia ativa (só existe ML agora).
-
-                # 🎯 FORÇAR O SISTEMA A USAR ESTA PREVISÃO IMEDIATAMENTE
                 logging.info(f"🎯 Nova previsão criada com combinação: {combinacao}")
                 return True
                 
@@ -2896,11 +2715,9 @@ class SistemaRoletaCompleto:
         return False
 
     def escolher_melhor_combinacao_alternativa(self, combinacoes):
-        """Escolhe a melhor combinação alternativa baseada em desempenho"""
         if not combinacoes:
             return None
         
-        # Tentar encontrar combinações com boa eficiência
         combinacoes_com_dados = []
         combinacoes_sem_dados = []
         
@@ -2911,30 +2728,20 @@ class SistemaRoletaCompleto:
             else:
                 combinacoes_sem_dados.append(combo)
         
-        # Priorizar combinações com dados e boa eficiência
         if combinacoes_com_dados:
-            # Ordenar por eficiência (melhor primeiro)
             combinacoes_com_dados.sort(key=lambda x: x[1].get('eficiencia', 0), reverse=True)
             melhor_combo = combinacoes_com_dados[0][0]
             
-            # Verificar se a eficiência é aceitável
             eficiencia = combinacoes_com_dados[0][1].get('eficiencia', 0)
             if eficiencia >= 25:
                 return melhor_combo
         
-        # Se não há combinações com boa eficiência, usar uma sem dados
         if combinacoes_sem_dados:
             return combinacoes_sem_dados[0]
         
-        # Último recurso: usar a primeira disponível
         return combinacoes[0] if combinacoes else None
 
     def aplicar_rotacao_inteligente(self):
-        """
-        Só existe a estratégia ML agora, então não há mais rotação entre
-        estratégias. Mantido como reset de sequência de erros para não quebrar
-        quem chama este método (rotacionar_estrategia_automaticamente).
-        """
         if self.combinacoes_quentes:
             logging.info(f"🎯 MANTENDO ML - {len(self.combinacoes_quentes)} combinações quentes")
         self.sequencia_erros = 0
@@ -2949,49 +2756,62 @@ class SistemaRoletaCompleto:
         self.contador_sorteios_global += 1
             
         if self.previsao_ativa:
-            # VERIFICAÇÃO DE ACERTO PARA MÚLTIPLAS ZONAS
             acerto = False
             zonas_acertadas = []
             nome_estrategia = self.previsao_ativa['nome']
             
-            # Verificar se o número está em qualquer uma das zonas envolvidas
             zonas_envolvidas = self.previsao_ativa.get('zonas_envolvidas', [])
+            
+            # CORREÇÃO: Verificação correta de acerto
             if not zonas_envolvidas:
-                # Fallback para lógica antiga
-                acerto = numero_real in self.previsao_ativa['numeros_apostar']
-                if acerto:
-                    # Descobrir qual zona acertou
-                    if 'Zonas' in nome_estrategia:
-                        for zona, numeros in self.estrategia_zonas.numeros_zonas.items():
-                            if numero_real in numeros:
-                                zonas_acertadas.append(zona)
-                                break
-                    elif 'ML' in nome_estrategia:
-                        for zona, numeros in self.estrategia_ml.numeros_zonas_ml.items():
-                            if numero_real in numeros:
-                                zonas_acertadas.append(zona)
-                                break
+                # Fallback: verificar todas as zonas da estratégia ativa
+                if 'ML' in nome_estrategia or 'Machine Learning' in nome_estrategia:
+                    for zona, numeros in self.estrategia_ml.numeros_zonas_ml.items():
+                        if numero_real in numeros:
+                            acerto = True
+                            zonas_acertadas.append(zona)
+                            break
+                else:
+                    for zona, numeros in self.estrategia_zonas.numeros_zonas.items():
+                        if numero_real in numeros:
+                            acerto = True
+                            zonas_acertadas.append(zona)
+                            break
             else:
-                # Nova lógica para múltiplas zonas
+                # Verificar se o número está em ALGUMA das zonas envolvidas
                 for zona in zonas_envolvidas:
-                    if 'Zonas' in nome_estrategia:
-                        numeros_zona = self.estrategia_zonas.numeros_zonas[zona]
-                    elif 'ML' in nome_estrategia:
-                        numeros_zona = self.estrategia_ml.numeros_zonas_ml[zona]
+                    if 'ML' in nome_estrategia or 'Machine Learning' in nome_estrategia:
+                        if zona in self.estrategia_ml.numeros_zonas_ml:
+                            numeros_zona = self.estrategia_ml.numeros_zonas_ml[zona]
+                        else:
+                            continue
                     else:
-                        continue
+                        if zona in self.estrategia_zonas.numeros_zonas:
+                            numeros_zona = self.estrategia_zonas.numeros_zonas[zona]
+                        else:
+                            continue
                     
                     if numero_real in numeros_zona:
                         acerto = True
                         zonas_acertadas.append(zona)
             
-            # 🎯 ATUALIZAR DESEMPENHO DA COMBINAÇÃO
+            # Se não encontrou acerto mas o número está em alguma zona, registrar
+            if not acerto and not zonas_acertadas:
+                if 'ML' in nome_estrategia or 'Machine Learning' in nome_estrategia:
+                    for zona, numeros in self.estrategia_ml.numeros_zonas_ml.items():
+                        if numero_real in numeros:
+                            zonas_acertadas.append(zona)
+                            break
+                else:
+                    for zona, numeros in self.estrategia_zonas.numeros_zonas.items():
+                        if numero_real in numeros:
+                            zonas_acertadas.append(zona)
+                            break
+            
             self.atualizar_desempenho_combinacao(zonas_envolvidas, acerto)
             
-            # 🎯 ATUALIZAR ANÁLISE DE TENDÊNCIAS
             self.atualizar_analise_tendencias(numero_real, zonas_acertadas[0] if zonas_acertadas else None, acerto)
             
-            # Verifica e aplica rotação automática se necessário
             rotacionou = self.rotacionar_estrategia_automaticamente(acerto, nome_estrategia, zonas_envolvidas)
             
             if nome_estrategia not in self.estrategias_contador:
@@ -3004,7 +2824,6 @@ class SistemaRoletaCompleto:
             else:
                 self.erros += 1
             
-            # Envia resultado super simplificado
             zona_acertada_str = "+".join(zonas_acertadas) if zonas_acertadas else None
             enviar_resultado_super_simplificado(numero_real, acerto, nome_estrategia, zona_acertada_str)
             
@@ -3024,10 +2843,6 @@ class SistemaRoletaCompleto:
             
             self.previsao_ativa = None
         
-        # estrategia_zonas continua recebendo os números só para manter as
-        # estatísticas de zona atualizadas (usadas pelas combinações/tendências
-        # e, indiretamente, pelas features de zona do ML). Ela não gera mais
-        # uma previsão própria.
         self.estrategia_zonas.adicionar_numero(numero_real)
         self.estrategia_ml.adicionar_numero(numero_real)
 
@@ -3038,35 +2853,28 @@ class SistemaRoletaCompleto:
             enviar_previsao_super_simplificada(nova_estrategia)
 
     def atualizar_analise_tendencias(self, numero, zona_acertada=None, acerto_ultima=False):
-        """Atualiza a análise de tendências"""
         try:
-            # Obter zonas rankeadas atuais
             zonas_rankeadas = self.estrategia_zonas.get_zonas_rankeadas()
             if not zonas_rankeadas:
                 return
             
-            # Analisar tendência
             analise_tendencia = self.sistema_tendencias.analisar_tendencia(
                 zonas_rankeadas, acerto_ultima, zona_acertada
             )
             
-            # Registrar no histórico
             self.sistema_tendencias.historico_tendencias.append(analise_tendencia)
             
-            # 🚨 NOTIFICAÇÕES AUTOMÁTICAS BASEADAS NA TENDÊNCIA
             self.enviar_notificacoes_tendencia(analise_tendencia)
             
         except Exception as e:
             logging.error(f"Erro na análise de tendências: {e}")
 
     def enviar_notificacoes_tendencia(self, analise_tendencia):
-        """Envia notificações baseadas no estado da tendência"""
         estado = analise_tendencia['estado']
         mensagem = analise_tendencia['mensagem']
         zona = analise_tendencia['zona_dominante']
         
         if estado == "ativa" and analise_tendencia['acao'] == "operar":
-            # 🔥 TENDÊNCIA CONFIRMADA - OPERAR
             enviar_telegram(f"🎯 TENDÊNCIA CONFIRMADA\n"
                           f"📍 Zona: {zona}\n"
                           f"📈 Estado: {estado}\n"
@@ -3074,7 +2882,6 @@ class SistemaRoletaCompleto:
                           f"📊 {mensagem}")
             
         elif estado == "enfraquecendo":
-            # ⚠️ TENDÊNCIA ENFRAQUECENDO - CUIDADO
             enviar_telegram(f"⚠️ TENDÊNCIA ENFRAQUECENDO\n"
                           f"📍 Zona: {zona}\n"
                           f"📈 Estado: {estado}\n"
@@ -3082,14 +2889,12 @@ class SistemaRoletaCompleto:
                           f"📊 {mensagem}")
             
         elif estado == "morta":
-            # 🟥 TENDÊNCIA MORTA - PARAR
             enviar_telegram(f"🟥 TENDÊNCIA MORTA\n"
                           f"📈 Estado: {estado}\n"
                           f"💡 Ação: PARAR\n"
                           f"📊 {mensagem}")
 
     def get_analise_tendencias_completa(self):
-        """Retorna análise completa das tendências"""
         analise = "🎯 SISTEMA DE DETECÇÃO DE TENDÊNCIAS\n"
         analise += "=" * 60 + "\n"
         
@@ -3105,7 +2910,6 @@ class SistemaRoletaCompleto:
         for i, zona in enumerate(resumo['historico_zonas'][-8:]):
             analise += f"  {i+1:2d}. {zona}\n"
         
-        # Última análise detalhada
         if self.sistema_tendencias.historico_tendencias:
             ultima = self.sistema_tendencias.historico_tendencias[-1]
             analise += f"\n📝 ÚLTIMA ANÁLISE:\n"
@@ -3114,7 +2918,6 @@ class SistemaRoletaCompleto:
             analise += f"  Ação: {ultima['acao'].upper()}\n"
             analise += f"  Mensagem: {ultima['mensagem']}\n"
         
-        # RECOMENDAÇÃO BASEADA NO FLUXOGRAMA
         analise += "\n💡 RECOMENDAÇÃO DO FLUXOGRAMA:\n"
         estado = resumo['estado']
         if estado == "aguardando":
@@ -3141,7 +2944,6 @@ class SistemaRoletaCompleto:
         return analise
 
     def zerar_estatisticas_desempenho(self):
-        """Zera todas as estatísticas de desempenho"""
         self.acertos = 0
         self.erros = 0
         self.estrategias_contador = {}
@@ -3150,36 +2952,28 @@ class SistemaRoletaCompleto:
         self.sequencia_erros = 0
         self.ultima_estrategia_erro = ""
         
-        # 🎯 ZERAR NOVAS VARIÁVEIS DE ACERTOS
         self.sequencia_acertos = 0
         self.ultima_combinacao_acerto = []
         self.historico_combinacoes_acerto = []
         
-        # 🎯 ZERAR COMBINAÇÕES DINÂMICAS
         self.historico_combinacoes = {}
         self.combinacoes_quentes = []
         self.combinacoes_frias = []
         
-        # Zerar estatísticas das estratégias
         self.estrategia_zonas.zerar_estatisticas()
         
-        # 🎯 ZERAR SISTEMA DE TENDÊNCIAS
         self.sistema_tendencias = SistemaTendencias()
         
         logging.info("📊 Todas as estatísticas de desempenho foram zeradas")
         salvar_sessao()
 
     def reset_recente_estatisticas(self):
-        """Faz um reset recente mantendo apenas os últimos 10 resultados"""
         if len(self.historico_desempenho) > 10:
-            # Manter apenas os últimos 10 resultados
             self.historico_desempenho = self.historico_desempenho[-10:]
             
-            # Recalcular acertos e erros
             self.acertos = sum(1 for resultado in self.historico_desempenho if resultado['acerto'])
             self.erros = len(self.historico_desempenho) - self.acertos
             
-            # Recalcular contadores por estratégia
             self.estrategias_contador = {}
             for resultado in self.historico_desempenho:
                 estrategia = resultado['estrategia']
@@ -3190,7 +2984,6 @@ class SistemaRoletaCompleto:
                 if resultado['acerto']:
                     self.estrategias_contador[estrategia]['acertos'] += 1
             
-            # Recalcular sequências
             ultimos_resultados = self.historico_desempenho[-5:]
             self.sequencia_erros = 0
             self.sequencia_acertos = 0
@@ -3214,7 +3007,6 @@ class SistemaRoletaCompleto:
         salvar_sessao()
 
     def get_status_rotacao(self):
-        """Retorna o status atual do sistema de rotação - ATUALIZADO COM COMBINAÇÕES"""
         return {
             'estrategia_atual': self.estrategia_selecionada,
             'sequencia_erros': self.sequencia_erros,
@@ -3259,7 +3051,6 @@ def fetch_latest_result():
 # FUNÇÃO PARA MOSTRAR COMBINAÇÕES DINÂMICAS
 # =============================
 def mostrar_combinacoes_dinamicas():
-    """Mostra as combinações quentes e frias atuais"""
     sistema = st.session_state.sistema
     
     if hasattr(sistema, 'combinacoes_quentes') and sistema.combinacoes_quentes:
@@ -3283,7 +3074,6 @@ def mostrar_combinacoes_dinamicas():
 # FUNÇÃO DE ALERTA DE TENDÊNCIA
 # =============================
 def enviar_alerta_tendencia(analise_tendencia):
-    """Envia alertas específicos para mudanças de tendência"""
     estado = analise_tendencia['estado']
     zona = analise_tendencia['zona_dominante']
     mensagem = analise_tendencia['mensagem']
@@ -3331,7 +3121,7 @@ if "telegram_chat_id" not in st.session_state and not sessao_carregada:
 # Sidebar - Configurações Avançadas
 st.sidebar.title("⚙️ Configurações")
 
-# 🎯 NOVO: Mostrar combinações dinâmicas
+# Mostrar combinações dinâmicas
 mostrar_combinacoes_dinamicas()
 
 # Gerenciamento de Sessão
@@ -3355,7 +3145,6 @@ with st.sidebar.expander("💾 Gerenciamento de Sessão", expanded=False):
     
     st.write("---")
     
-    # Botões para zerar estatísticas
     st.write("**📊 Gerenciar Estatísticas**")
     
     col3, col4 = st.columns(2)
@@ -3450,12 +3239,12 @@ with st.sidebar.expander("🔔 Alertas Alternativos", expanded=False):
         else:
             st.error("❌ Configure o Telegram primeiro")
 
-# Estratégia única: Machine Learning (com sinais de zona embutidos como features)
+# Estratégia única: Machine Learning
 estrategia = "ML"
 st.session_state.sistema.estrategia_selecionada = "ML"
 st.sidebar.info("🤖 **Estratégia ativa:** Machine Learning (zonas embutidas como features)")
 
-# Status da Rotação Automática - ATUALIZADO
+# Status da Rotação Automática
 with st.sidebar.expander("🔄 Rotação Automática", expanded=True):
     status_rotacao = st.session_state.sistema.get_status_rotacao()
     
@@ -3483,7 +3272,6 @@ with st.sidebar.expander("🔄 Rotação Automática", expanded=True):
     st.write("• 🔄 **Combinações disponíveis:** Vermelho+Azul, Vermelho+Amarelo, Azul+Amarelo")
     st.caption("A estratégia ativa continua sempre ML — a rotação troca apenas a combinação de zonas usada na aposta dupla.")
     
-    # Botão para zerar manualmente os contadores de sequência
     if st.button("🔄 Zerar Contadores de Sequência", use_container_width=True):
         st.session_state.sistema.sequencia_erros = 0
         st.session_state.sistema.sequencia_acertos = 0
@@ -3602,19 +3390,45 @@ with st.sidebar.expander("🔍 Análise - ML", expanded=False):
     analise = st.session_state.sistema.estrategia_ml.get_analise_ml()
     st.text(analise)
 
-# Entrada manual
+# Entrada manual - CORRIGIDA
 st.subheader("✍️ Inserir Sorteios")
 entrada = st.text_input("Digite números (0-36) separados por espaço:")
-if st.button("Adicionar") and entrada:
+
+# CORREÇÃO: Adicionar entrada de zonas
+entrada_zonas = st.text_input("Ou digite zonas (Vermelha, Azul, Amarela) separadas por vírgula:")
+
+if st.button("Adicionar") and (entrada or entrada_zonas):
     try:
-        nums = [int(n) for n in entrada.split() if n.isdigit() and 0 <= int(n) <= 36]
-        for n in nums:
-            item = {"number": n, "timestamp": f"manual_{len(st.session_state.historico)}"}
-            st.session_state.historico.append(item)
-            st.session_state.sistema.processar_novo_numero(n)
+        if entrada:
+            nums = [int(n) for n in entrada.split() if n.isdigit() and 0 <= int(n) <= 36]
+            for n in nums:
+                item = {"number": n, "timestamp": f"manual_{len(st.session_state.historico)}"}
+                st.session_state.historico.append(item)
+                st.session_state.sistema.processar_novo_numero(n)
+            st.success(f"{len(nums)} números adicionados!")
+        
+        if entrada_zonas:
+            zonas = [z.strip().capitalize() for z in entrada_zonas.split(',') if z.strip()]
+            zonas_validas = ['Vermelha', 'Azul', 'Amarela']
+            
+            zona_para_numero = {
+                'Vermelha': 7,
+                'Azul': 10,
+                'Amarela': 2
+            }
+            
+            for zona in zonas:
+                if zona in zonas_validas:
+                    numero_exemplo = zona_para_numero[zona]
+                    item = {"number": numero_exemplo, "timestamp": f"manual_zona_{len(st.session_state.historico)}"}
+                    st.session_state.historico.append(item)
+                    st.session_state.sistema.processar_novo_numero(numero_exemplo)
+                    st.success(f"✅ Zona {zona} adicionada (número {numero_exemplo})")
+                else:
+                    st.warning(f"⚠️ Zona '{zona}' inválida. Use: Vermelha, Azul ou Amarela")
+        
         salvar_resultado_em_arquivo(st.session_state.historico)
         salvar_sessao()
-        st.success(f"{len(nums)} números adicionados!")
         st.rerun()
     except Exception as e:
         st.error(f"Erro: {e}")
@@ -3646,7 +3460,7 @@ if st.session_state.historico:
 else:
     st.write("Nenhum número registrado")
 
-# Status da Rotação na Interface Principal - ATUALIZADO
+# Status da Rotação na Interface Principal
 status_rotacao = st.session_state.sistema.get_status_rotacao()
 col_status1, col_status2, col_status3, col_status4 = st.columns(4)
 with col_status1:
@@ -3658,18 +3472,15 @@ with col_status3:
 with col_status4:
     st.metric("🔄 Próxima Rotação", f"A:{status_rotacao['proxima_rotacao_acertos']} E:{status_rotacao['proxima_rotacao_erros']}")
 
-# 🎯 NOVA SEÇÃO: ANÁLISE DE TENDÊNCIAS
+# Análise de Tendências
 st.subheader("📈 Análise de Tendências")
 
-# Obter análise de tendências
 tendencia_analise = st.session_state.sistema.get_analise_tendencias_completa()
 st.text_area("Estado da Tendência", tendencia_analise, height=400, key="tendencia_analise")
 
-# Botões de controle
 col_t1, col_t2 = st.columns(2)
 with col_t1:
     if st.button("🔄 Atualizar Análise de Tendência", use_container_width=True):
-        # Forçar nova análise com dados atuais
         zonas_rankeadas = st.session_state.sistema.estrategia_zonas.get_zonas_rankeadas()
         if zonas_rankeadas:
             analise = st.session_state.sistema.sistema_tendencias.analisar_tendencia(zonas_rankeadas)
@@ -3678,18 +3489,16 @@ with col_t1:
 
 with col_t2:
     if st.button("📊 Detalhes da Tendência", use_container_width=True):
-        # Mostrar detalhes expandidos
         resumo = st.session_state.sistema.sistema_tendencias.get_resumo_tendencia()
         st.write("**📊 Detalhes da Tendência:**")
         st.json(resumo)
 
-# 🚨 ALERTAS VISUAIS DE TENDÊNCIA
+# Alertas visuais de tendência
 if (st.session_state.sistema.sistema_tendencias.historico_tendencias and 
     len(st.session_state.sistema.sistema_tendencias.historico_tendencias) > 0):
     
     ultima_analise = st.session_state.sistema.sistema_tendencias.historico_tendencias[-1]
     
-    # Alertar apenas para estados importantes
     if ultima_analise['estado'] in ['ativa', 'enfraquecendo', 'morta']:
         enviar_alerta_tendencia(ultima_analise)
 
@@ -3699,6 +3508,25 @@ sistema = st.session_state.sistema
 if sistema.previsao_ativa:
     previsao = sistema.previsao_ativa
     st.success(f"**{previsao['nome']}**")
+    
+    # CORREÇÃO: Mostrar zonas da previsão
+    zonas_envolvidas = previsao.get('zonas_envolvidas', [])
+    if zonas_envolvidas:
+        nucleos = []
+        for zona in zonas_envolvidas:
+            if zona == 'Vermelha':
+                nucleos.append("7")
+            elif zona == 'Azul':
+                nucleos.append("10")
+            elif zona == 'Amarela':
+                nucleos.append("2")
+            else:
+                nucleos.append(zona)
+        
+        if len(nucleos) == 1:
+            st.info(f"📍 **Zona prevista:** {zonas_envolvidas[0]} (Núcleo {nucleos[0]})")
+        else:
+            st.info(f"📍 **Zonas previstas:** {' + '.join(zonas_envolvidas)} (Núcleos {' + '.join(nucleos)})")
     
     if previsao.get('selecao_inteligente', False):
         st.success("🎯 **SELEÇÃO INTELIGENTE ATIVA** - 15 melhores números selecionados")
@@ -3786,7 +3614,6 @@ col2.metric("🔴 Erros", sistema.erros)
 col3.metric("📊 Total", total)
 col4.metric("✅ Taxa", f"{taxa:.1f}%")
 
-# Botões de gerenciamento de estatísticas na seção de desempenho
 st.write("**Gerenciar Estatísticas:**")
 col5, col6 = st.columns(2)
 
@@ -3859,5 +3686,5 @@ if os.path.exists(HISTORICO_PATH):
         conteudo = f.read()
     st.download_button("📥 Baixar histórico", data=conteudo, file_name="historico_roleta.json")
 
-# ✅ CORREÇÃO FINAL: Salvar sessão
+# Salvar sessão
 salvar_sessao()
