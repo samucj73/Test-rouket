@@ -936,6 +936,21 @@ class MLRoletaOtimizada:
         self.numeros = list(range(37))
         self.ensemble_size = 3
 
+        # ---- Configuração das Zonas (espelha EstrategiaZonasOtimizada) ----
+        # Mantido separado do estado ao vivo da estratégia de Zonas de propósito:
+        # as features de zona usadas no treino/inferência do ML são recalculadas
+        # 100% a partir da janela de histórico recebida em cada chamada, nunca a
+        # partir de self.stats_zonas de uma instância ao vivo. Isso evita
+        # vazamento de dados (usar estatísticas "do futuro" para treinar amostras
+        # do passado).
+        self.zonas_config = {'Vermelha': 7, 'Azul': 10, 'Amarela': 2}
+        self.zonas_quantidade = 6
+        self.numeros_zonas = {
+            nome: self.roleta.get_vizinhos_zona(central, self.zonas_quantidade)
+            for nome, central in self.zonas_config.items()
+        }
+        self.janelas_zonas = {'curto': 12, 'medio': 24, 'longo': 48}
+
     def get_neighbors(self, numero, k=None):
         if k is None:
             k = self.k_vizinhos
@@ -949,6 +964,117 @@ class MLRoletaOtimizada:
             return neighbors
         except Exception:
             return [numero]
+
+    def _extrair_features_zonas(self, historico):
+        """
+        Recalcula, de forma stateless, as métricas da estratégia de Zonas
+        (frequência por janela, performance histórica, sequência atual/máxima
+        e o score de ranqueamento usado por EstrategiaZonasOtimizada.get_zona_score)
+        usando SOMENTE a fatia de histórico recebida.
+
+        Isso é o que garante que a mesma lógica sirva tanto para treino
+        (chamada com historico_completo[:i] para cada amostra i) quanto para
+        inferência (chamada com o histórico completo até o momento), sem
+        misturar estado acumulado em tempo real da estratégia de Zonas.
+        """
+        N = len(historico)
+        feats = []
+        names = []
+
+        scores = {}
+        performances = {}
+
+        for zona, numeros_zona in self.numeros_zonas.items():
+            pertence = [1 if n in numeros_zona else 0 for n in historico]
+
+            tentativas = N
+            acertos = sum(pertence)
+            performance_media = (acertos / tentativas * 100) if tentativas > 0 else 0.0
+
+            # sequência atual: corrida de acertos consecutivos terminando no último elemento
+            sequencia_atual = 0
+            for v in reversed(pertence):
+                if v == 1:
+                    sequencia_atual += 1
+                else:
+                    break
+
+            # sequência máxima observada na janela
+            sequencia_maxima = 0
+            corrida = 0
+            for v in pertence:
+                corrida = corrida + 1 if v == 1 else 0
+                sequencia_maxima = max(sequencia_maxima, corrida)
+
+            prop_geral = (acertos / N) if N > 0 else 0.0
+            props_janela = {}
+            for nome_j, tamanho_j in self.janelas_zonas.items():
+                janela = historico[-tamanho_j:] if N >= tamanho_j else historico
+                if len(janela) > 0:
+                    props_janela[nome_j] = sum(1 for n in janela if n in numeros_zona) / len(janela)
+                else:
+                    props_janela[nome_j] = 0.0
+
+            # mesmo esquema de pesos de EstrategiaZonasOtimizada.get_zona_score
+            score = 0.0
+            score += prop_geral * 25
+            score += props_janela['curto'] * 35
+            score += props_janela['medio'] * 15
+            score += props_janela['longo'] * 15
+            if tentativas > 10:
+                if performance_media > 40: score += 30
+                elif performance_media > 35: score += 25
+                elif performance_media > 30: score += 20
+                elif performance_media > 25: score += 15
+                else: score += 10
+            else:
+                score += 10
+            if sequencia_atual >= 2:
+                score += min(sequencia_atual * 3, 12)
+
+            scores[zona] = score
+            performances[zona] = performance_media
+
+            feats.extend([
+                prop_geral,
+                props_janela['curto'],
+                props_janela['medio'],
+                props_janela['longo'],
+                performance_media / 100.0,
+                min(sequencia_atual, 10) / 10.0,
+                min(sequencia_maxima, 20) / 20.0,
+                score / 100.0,
+            ])
+            names.extend([
+                f"zona_{zona}_prop_geral",
+                f"zona_{zona}_prop_curto",
+                f"zona_{zona}_prop_medio",
+                f"zona_{zona}_prop_longo",
+                f"zona_{zona}_performance",
+                f"zona_{zona}_sequencia_atual",
+                f"zona_{zona}_sequencia_maxima",
+                f"zona_{zona}_score",
+            ])
+
+        # sinal derivado: zona vencedora (one-hot) e margem de confiança do ranking
+        if scores:
+            ranking = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+            zona_vencedora = ranking[0][0]
+            score_top1 = ranking[0][1]
+            score_top2 = ranking[1][1] if len(ranking) > 1 else 0.0
+            margem = (score_top1 - score_top2) / 100.0
+        else:
+            zona_vencedora = None
+            margem = 0.0
+
+        for zona in self.numeros_zonas.keys():
+            feats.append(1.0 if zona == zona_vencedora else 0.0)
+            names.append(f"zona_{zona}_e_vencedora")
+
+        feats.append(margem)
+        names.append("zonas_margem_confianca")
+
+        return feats, names
 
     def extrair_features(self, historico, numero_alvo=None):
         try:
@@ -1029,6 +1155,11 @@ class MLRoletaOtimizada:
             diffs = [abs(historico[i] - historico[i-1]) for i in range(1, len(historico))]
             features.append(np.mean(diffs) if len(diffs)>0 else 0.0); names.append("media_transicoes")
             features.append(np.std(diffs) if len(diffs)>1 else 0.0); names.append("std_transicoes")
+
+            # ---- Features da estratégia de Zonas (ver _extrair_features_zonas) ----
+            feats_zonas, names_zonas = self._extrair_features_zonas(historico)
+            features.extend(feats_zonas)
+            names.extend(names_zonas)
 
             self.feature_names = names
             return features, names
@@ -1272,6 +1403,18 @@ class MLRoletaOtimizada:
         feats, _ = self.extrair_features(historico)
         if feats is None:
             return None, "Features insuficientes"
+
+        # Guarda de compatibilidade: um modelo salvo em disco antes da
+        # introdução das features de Zonas tem um número diferente de
+        # colunas. Em vez de deixar o scaler.transform estourar exceção,
+        # invalidamos o modelo em memória e pedimos retreino explícito.
+        n_features_esperado = getattr(self.scaler, "n_features_in_", len(feats))
+        if len(feats) != n_features_esperado:
+            self.is_trained = False
+            return None, (
+                f"Schema de features mudou ({len(feats)} vs {n_features_esperado} "
+                "esperadas pelo modelo salvo). Retreine o modelo."
+            )
 
         Xs = np.array([feats])
         Xs_scaled = self.scaler.transform(Xs)
