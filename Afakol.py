@@ -2185,4 +2185,4 @@ st.markdown("""
 .footer-sub{font-size:11px;color:#bfbfbf;margin-top:4px;letter-spacing:1.5px;}
 </style>
 <div class="footer-premium"><div class="footer-title">ELITE MASTER SYSTEM</div><div class="footer-sub">SAMUCJ TECNOLOGIA © 2026</div></div>
-""", unsafe_allow_html=True)
+""", unsafe_allow_html=True) analise o meu código e implemente no final do código um botão para fazer o download dos jogos gerados esse botão deve funcionar em todas estratégias dependendo da estratégia da aba que estiver gerando ele pode fazer o o download dos dos dos jogos gerados pela estratégia adiciona esse botão e cole aqui o código completo corrigido e atualizado sem alterar a estrutura principal do código
